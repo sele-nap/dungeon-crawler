@@ -10,7 +10,6 @@ class GameMap {
   }
 
   generate() {
-    // Fill everything with walls first
     for (let y = 0; y < MAP_H; y++) {
       for (let x = 0; x < MAP_W; x++) {
         this.tiles[`${x},${y}`] = 'wall';

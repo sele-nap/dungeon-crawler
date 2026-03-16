@@ -1,7 +1,7 @@
 const ENEMY_TYPES = {
-  goblin: { char: 'g', color: 'green',   hp: 10, atk: 3, xp: 5,  name: 'Gobelin' },
-  orc:    { char: 'o', color: '#ff6600', hp: 20, atk: 5, xp: 10, name: 'Orque'   },
-  troll:  { char: 'T', color: 'magenta', hp: 35, atk: 8, xp: 20, name: 'Troll'   },
+  goblin: { char: 'g', color: 'green',   hp: 10, atk: 3, xp: 5  },
+  orc:    { char: 'o', color: '#ff6600', hp: 20, atk: 5, xp: 10 },
+  troll:  { char: 'T', color: 'magenta', hp: 35, atk: 8, xp: 20 },
 };
 
 class Player {

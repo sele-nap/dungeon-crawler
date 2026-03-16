@@ -1,14 +1,17 @@
 const blessed = require('blessed');
 const { MAP_W, MAP_H } = require('./config');
+const { fr } = require('./lang');
 
 const ENEMY_COLORS = {
   goblin: 'green',
-  orc: '#ff6600',
-  troll: 'magenta',
+  orc:    '#ff6600',
+  troll:  'magenta',
 };
 
 class Renderer {
-  constructor() {
+  constructor(lang = fr) {
+    this.lang = lang;
+
     this.screen = blessed.screen({
       smartCSR: true,
       title: 'Dungeon Crawler',
@@ -16,7 +19,6 @@ class Renderer {
       forceUnicode: true,
     });
 
-    // Map area
     this.mapBox = blessed.box({
       parent: this.screen,
       top: 0,
@@ -28,30 +30,28 @@ class Renderer {
       tags: true,
     });
 
-    // Stats panel
     this.statsBox = blessed.box({
       parent: this.screen,
       top: 0,
       left: MAP_W + 2,
-      width: 22,
+      width: 28,
       height: MAP_H + 2,
       border: { type: 'line', fg: '#333' },
       style: { bg: '#0d0d0d', fg: 'white' },
       tags: true,
-      label: ' {#888888-fg}Stats{/} ',
+      label: ` {#888888-fg}${lang.statsLabel.trim()}{/} `,
     });
 
-    // Message log
     this.logBox = blessed.box({
       parent: this.screen,
       top: MAP_H + 2,
       left: 0,
-      width: MAP_W + 2 + 22,
+      width: MAP_W + 2 + 28,
       height: 10,
       border: { type: 'line', fg: '#333' },
       style: { bg: '#080808', fg: '#666' },
       tags: true,
-      label: ' {#888888-fg}Journal{/} ',
+      label: ` {#888888-fg}${lang.logLabel.trim()}{/} `,
     });
   }
 
@@ -64,50 +64,34 @@ class Renderer {
 
   renderMap(game) {
     const { map, player, enemies, items, visible } = game;
-    let lines = [];
+    const lines = [];
 
     for (let y = 0; y < MAP_H; y++) {
       let line = '';
       for (let x = 0; x < MAP_W; x++) {
         const key = `${x},${y}`;
-        const isVisible = visible.has(key);
+        const isVisible  = visible.has(key);
         const isExplored = map.explored.has(key);
 
-        if (!isExplored) {
-          line += ' ';
-          continue;
-        }
+        if (!isExplored) { line += ' '; continue; }
 
         const tile = map.tiles[key];
 
         if (isVisible) {
-          // Player
           if (x === player.x && y === player.y) {
-            line += '{bright-white-fg}@{/}';
-            continue;
+            line += '{bright-white-fg}@{/}'; continue;
           }
-          // Enemy
           const enemy = enemies.find(e => e.alive && e.x === x && e.y === y);
           if (enemy) {
-            const c = ENEMY_COLORS[enemy.type] || 'red';
-            line += `{${c}-fg}${enemy.char}{/}`;
-            continue;
+            line += `{${ENEMY_COLORS[enemy.type] || 'red'}-fg}${enemy.char}{/}`; continue;
           }
-          // Item
           const item = items.find(i => i.x === x && i.y === y);
           if (item) {
-            line += `{${item.color}-fg}${item.char}{/}`;
-            continue;
+            line += `{${item.color}-fg}${item.char}{/}`; continue;
           }
-          // Tile (lit)
-          line += tile === 'wall'
-            ? '{#555555-fg}#{/}'
-            : '{#3a3a3a-fg}\u00b7{/}';
+          line += tile === 'wall' ? '{#555555-fg}#{/}' : '{#3a3a3a-fg}\u00b7{/}';
         } else {
-          // Memory (fog)
-          line += tile === 'wall'
-            ? '{#222222-fg}#{/}'
-            : '{#181818-fg}\u00b7{/}';
+          line += tile === 'wall' ? '{#222222-fg}#{/}' : '{#181818-fg}\u00b7{/}';
         }
       }
       lines.push(line);
@@ -117,32 +101,29 @@ class Renderer {
   }
 
   renderStats(player, floor) {
-    const hpBar  = this.progressBar(player.hp,  player.maxHp, 14, 'red',  '#800000');
-    const xpBar  = this.progressBar(player.xp,  player.xpNext, 14, '#4488ff', '#002244');
+    const t    = this.lang;
+    const hpBar = this.progressBar(player.hp,  player.maxHp,  14, 'red',      '#800000');
+    const xpBar = this.progressBar(player.xp,  player.xpNext, 14, '#4488ff',  '#002244');
 
     const lines = [
       `{bold}{#aaaaaa-fg}⚔  DUNGEON CRAWLER{/}`,
       ``,
-      `{#888888-fg}Étage{/}  {yellow-fg}${floor} / 5{/}`,
+      `{#888888-fg}${t.floor}{/}  {yellow-fg}${floor} / 5{/}`,
       ``,
-      `{red-fg}♥ PV{/}  {white-fg}${player.hp}/${player.maxHp}{/}`,
+      `{red-fg}${t.hp}{/}  {white-fg}${player.hp}/${player.maxHp}{/}`,
       hpBar,
       ``,
-      `{#4488ff-fg}✦ XP{/}  {white-fg}${player.xp}/${player.xpNext}{/}`,
+      `{#4488ff-fg}${t.xp}{/}  {white-fg}${player.xp}/${player.xpNext}{/}`,
       xpBar,
       ``,
-      `{#888888-fg}Niveau{/}  {white-fg}${player.level}{/}`,
-      `{#888888-fg}Attaque{/} {white-fg}${player.atk}{/}`,
-      `{#888888-fg}Défense{/} {white-fg}${player.def}{/}`,
+      `{#888888-fg}${t.level}{/}   {white-fg}${player.level}{/}`,
+      `{#888888-fg}${t.attack}{/}  {white-fg}${player.atk}{/}`,
+      `{#888888-fg}${t.defense}{/} {white-fg}${player.def}{/}`,
       ``,
-      `{#ff44ff-fg}! Potions{/} {white-fg}${player.potions}{/}`,
+      `{#ff44ff-fg}${t.potions}{/} {white-fg}${player.potions}{/}`,
       ``,
       `{#333333-fg}────────────────{/}`,
-      `{#444444-fg}↑↓←→  déplacer{/}`,
-      `{#444444-fg}H     potion{/}`,
-      `{#444444-fg}>     escaliers{/}`,
-      `{#444444-fg}R     rejouer{/}`,
-      `{#444444-fg}Q     quitter{/}`,
+      ...t.controls.map(c => `{#444444-fg}${c}{/}`),
     ];
 
     this.statsBox.setContent(lines.join('\n'));
@@ -162,12 +143,76 @@ class Renderer {
 
     if (gameOver) {
       const banner = won
-        ? `{yellow-fg}{bold}★  VICTOIRE !  Vous avez conquis le donjon.  ★{/}`
-        : `{red-fg}{bold}†  VOUS ÊTES MORT  †   [R] rejouer  [Q] quitter{/}`;
+        ? `{yellow-fg}{bold}${this.lang.bannerVictory}{/}`
+        : `{red-fg}{bold}${this.lang.bannerDeath}{/}`;
       lines = [banner, '', ...lines];
     }
 
     this.logBox.setContent(lines.join('\n'));
+  }
+
+  pickLanguage() {
+    return new Promise(resolve => {
+      const box = blessed.box({
+        parent: this.screen,
+        top: 'center',
+        left: 'center',
+        width: 54,
+        height: 13,
+        border: { type: 'line', fg: '#555' },
+        style: { bg: '#0d0d0d' },
+        tags: true,
+      });
+
+      const options = ['en', 'fr'];
+      const labels  = ['[ EN ]  English', '[ FR ]  Français'];
+      const subtitles = ['Choose your language', 'Choisissez votre langue'];
+      const hints     = [
+        '↑↓ navigate  •  Enter confirm  •  Esc quit',
+        '↑↓ choisir   •  Entrée confirmer  •  Échap quitter',
+      ];
+
+      const render = (sel) => {
+        box.setContent([
+          ``,
+          `{center}{bold}{#aaaaaa-fg}⚔  DUNGEON CRAWLER{/}{/center}`,
+          ``,
+          `{center}{#555555-fg}${subtitles[sel]}{/}{/center}`,
+          ``,
+          ...labels.map((l, i) =>
+            i === sel
+              ? `{center}{bold}{white-fg}►  ${l}  ◄{/}{/center}`
+              : `{center}{#555555-fg}   ${l}   {/}{/center}`
+          ),
+          ``,
+          `{center}{#444444-fg}${hints[sel]}{/}{/center}`,
+        ].join('\n'));
+        this.screen.render();
+      };
+
+      let sel = 1;
+      render(sel);
+
+      const handler = (ch, key) => {
+        if (key.name === 'up'   || key.name === 'down') {
+          sel = sel === 0 ? 1 : 0;
+          render(sel);
+        }
+        if (key.name === 'enter') {
+          this.screen.unkey(['up', 'down', 'enter', 'escape'], handler);
+          box.destroy();
+          this.screen.render();
+          resolve(options[sel]);
+        }
+        if (key.name === 'escape') {
+          this.screen.unkey(['up', 'down', 'enter', 'escape'], handler);
+          box.destroy();
+          process.exit(0);
+        }
+      };
+
+      this.screen.key(['up', 'down', 'enter', 'escape'], handler);
+    });
   }
 }
 

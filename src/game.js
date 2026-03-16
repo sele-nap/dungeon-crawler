@@ -1,6 +1,7 @@
 const ROT = require('rot-js');
 const { GameMap } = require('./map');
 const { Player, Enemy } = require('./entities');
+const { fr } = require('./lang');
 const { MAP_W, MAP_H, FOV_RADIUS, MAX_ENEMIES_PER_ROOM, TOTAL_FLOORS } = require('./config');
 
 const ENEMY_POOL = [
@@ -10,7 +11,8 @@ const ENEMY_POOL = [
 ];
 
 class Game {
-  constructor() {
+  constructor(lang = fr) {
+    this.lang = lang;
     this.map = null;
     this.player = null;
     this.enemies = [];
@@ -28,7 +30,6 @@ class Game {
     this.items = [];
     this.visible = new Set();
 
-    // Place player in first room
     const [px, py] = this.map.rooms[0].getCenter();
     if (!this.player) {
       this.player = new Player(px, py);
@@ -39,17 +40,14 @@ class Game {
 
     const pool = ENEMY_POOL[Math.min(this.floor - 1, ENEMY_POOL.length - 1)];
 
-    // Populate other rooms
     this.map.rooms.slice(1).forEach((room, idx) => {
       const isLastRoom = idx === this.map.rooms.length - 2;
 
-      // Stairs in last room
       if (isLastRoom) {
         const [sx, sy] = room.getCenter();
         this.items.push({ x: sx, y: sy, type: 'stairs', char: '>', color: 'yellow' });
       }
 
-      // Enemies
       const count = Math.floor(ROT.RNG.getUniform() * (MAX_ENEMIES_PER_ROOM + 1));
       for (let i = 0; i < count; i++) {
         const rw = room.getRight() - room.getLeft();
@@ -60,7 +58,6 @@ class Game {
         this.enemies.push(new Enemy(type, ex, ey));
       }
 
-      // Potion (random chance)
       if (ROT.RNG.getUniform() < 0.3) {
         const [cx, cy] = room.getCenter();
         this.items.push({ x: cx, y: cy, type: 'potion', char: '!', color: '#ff44ff' });
@@ -70,10 +67,10 @@ class Game {
     this.computeFov();
 
     if (this.floor === 1) {
-      this.log('Vous pénétrez dans les profondeurs...');
-      this.log('Flèches: déplacer  H: potion  >: escaliers');
+      this.log(this.lang.msgEnter);
+      this.log(this.lang.msgControls);
     } else {
-      this.log(`Étage ${this.floor}. L'obscurité s'épaissit...`);
+      this.log(this.lang.msgFloor(this.floor));
     }
   }
 
@@ -98,7 +95,6 @@ class Game {
     const nx = this.player.x + dx;
     const ny = this.player.y + dy;
 
-    // Bump attack
     const enemy = this.enemies.find(e => e.alive && e.x === nx && e.y === ny);
     if (enemy) {
       this.attackEnemy(enemy);
@@ -124,22 +120,23 @@ class Game {
     if (item.type === 'potion') {
       this.items.splice(idx, 1);
       this.player.potions++;
-      this.log('Vous ramassez une potion de soin.');
+      this.log(this.lang.msgPickPotion);
     } else if (item.type === 'stairs') {
       this.nextFloor();
     }
   }
 
   attackEnemy(enemy) {
+    const name = this.lang.enemies[enemy.type];
     const roll = Math.floor(ROT.RNG.getUniform() * 4);
-    const dmg = Math.max(1, this.player.atk + roll - 1);
+    const dmg  = Math.max(1, this.player.atk + roll - 1);
     enemy.hp -= dmg;
     if (enemy.hp <= 0) {
       enemy.alive = false;
-      this.player.gainXp(enemy.xp, lvl => this.log(`Niveau ${lvl} ! Vous vous sentez plus fort.`));
-      this.log(`Vous tuez le ${enemy.name}. (+${enemy.xp} XP)`);
+      this.player.gainXp(enemy.xp, lvl => this.log(this.lang.msgLevelUp(lvl)));
+      this.log(this.lang.msgKill(name, enemy.xp));
     } else {
-      this.log(`Vous frappez le ${enemy.name} pour ${dmg} dégâts. [${enemy.hp}/${enemy.maxHp}]`);
+      this.log(this.lang.msgHit(name, dmg, enemy.hp, enemy.maxHp));
     }
   }
 
@@ -151,24 +148,23 @@ class Game {
       const dy = Math.abs(this.player.y - enemy.y);
 
       if (dx + dy === 1) {
-        // Adjacent — attack
-        const dmg = Math.max(1, enemy.atk + Math.floor(ROT.RNG.getUniform() * 3) - this.player.def);
+        const name = this.lang.enemies[enemy.type];
+        const dmg  = Math.max(1, enemy.atk + Math.floor(ROT.RNG.getUniform() * 3) - this.player.def);
         this.player.hp -= dmg;
-        this.log(`Le ${enemy.name} vous frappe pour ${dmg} dégâts.`);
+        this.log(this.lang.msgEnemyHit(name, dmg));
         if (this.player.hp <= 0) {
           this.player.hp = 0;
           this.gameOver = true;
-          this.log('Vous êtes mort. [R] pour recommencer.');
+          this.log(this.lang.msgDeath);
           return;
         }
       } else {
-        // Pathfind
         const passable = (x, y) =>
           this.map.isWalkable(x, y) &&
           !this.enemies.find(e => e.alive && e.x === x && e.y === y);
 
         const astar = new ROT.Path.AStar(this.player.x, this.player.y, passable, { topology: 4 });
-        const path = [];
+        const path  = [];
         astar.compute(enemy.x, enemy.y, (x, y) => path.push([x, y]));
 
         if (path.length > 1) {
@@ -181,35 +177,35 @@ class Game {
   usePotion() {
     if (this.gameOver) return;
     if (this.player.potions <= 0) {
-      this.log("Plus de potions !");
+      this.log(this.lang.msgNoPotion);
       return;
     }
     if (this.player.hp === this.player.maxHp) {
-      this.log("Vous êtes déjà au maximum.");
+      this.log(this.lang.msgFullHp);
       return;
     }
     this.player.potions--;
     const heal = 15 + Math.floor(ROT.RNG.getUniform() * 10);
     this.player.heal(heal);
-    this.log(`Vous buvez une potion et récupérez ${heal} PV.`);
+    this.log(this.lang.msgHeal(heal));
   }
 
   nextFloor() {
     this.floor++;
     if (this.floor > TOTAL_FLOORS) {
-      this.won = true;
+      this.won      = true;
       this.gameOver = true;
-      this.log("Vous saisissez l'Artefact Légendaire. Victoire !");
+      this.log(this.lang.msgVictory);
       return;
     }
     this.init();
   }
 
   restart() {
-    this.floor = 1;
+    this.floor    = 1;
     this.gameOver = false;
-    this.won = false;
-    this.player = null;
+    this.won      = false;
+    this.player   = null;
     this.messages = [];
     this.init();
   }
